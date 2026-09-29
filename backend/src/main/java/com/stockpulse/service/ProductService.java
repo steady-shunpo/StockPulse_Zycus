@@ -21,6 +21,9 @@ public class ProductService {
     @Autowired
     private ReorderSuggestionRepository reorderSuggestionRepository;
     
+    @Autowired
+    private CommerceAdvisorSelector commerceAdvisorSelector;
+    
     /**
      * Record a sale for a product and evaluate triggers
      */
@@ -76,7 +79,7 @@ public class ProductService {
     }
     
     /**
-     * Evaluate triggers for low inventory or demand spikes
+     * Evaluate triggers for low inventory or demand spikes using CommerceAdvisor
      */
     public void evaluateTriggers(Product product) {
         // Check for low inventory trigger
@@ -84,8 +87,8 @@ public class ProductService {
             // Move to PRICE_REVIEW_PENDING if not already
             if (product.getStatus() != ProductStatus.PRICE_REVIEW_PENDING) {
                 product.setStatus(ProductStatus.PRICE_REVIEW_PENDING);
-                // Generate pricing suggestion
-                generatePricingSuggestion(product, TriggerReason.INVENTORY_LOW);
+                // Generate pricing suggestion using CommerceAdvisor
+                generatePricingSuggestionWithAdvisor(product, TriggerReason.INVENTORY_LOW);
             }
         }
         
@@ -94,7 +97,29 @@ public class ProductService {
     }
     
     /**
-     * Generate a manual pricing suggestion
+     * Generate a pricing suggestion using the CommerceAdvisor
+     */
+    private PricingSuggestion generatePricingSuggestionWithAdvisor(Product product, TriggerReason triggerReason) {
+        AdvisoryResult result = commerceAdvisorSelector.generateRecommendations(product);
+        PricingSuggestion pricingSuggestion = result.getPricingSuggestion();
+        pricingSuggestion.setTriggerReason(triggerReason);
+        
+        return pricingSuggestionRepository.save(pricingSuggestion);
+    }
+    
+    /**
+     * Generate a reorder suggestion using the CommerceAdvisor
+     */
+    private ReorderSuggestion generateReorderSuggestionWithAdvisor(Product product, TriggerReason triggerReason) {
+        AdvisoryResult result = commerceAdvisorSelector.generateRecommendations(product);
+        ReorderSuggestion reorderSuggestion = result.getReorderSuggestion();
+        reorderSuggestion.setTriggerReason(triggerReason);
+        
+        return reorderSuggestionRepository.save(reorderSuggestion);
+    }
+    
+    /**
+     * Generate a manual pricing suggestion using the CommerceAdvisor
      */
     @Transactional
     public PricingSuggestion generateManualPricingSuggestion(String productId) {
@@ -104,31 +129,18 @@ public class ProductService {
         }
         
         Product product = productOpt.get();
-        return generatePricingSuggestion(product, TriggerReason.MANUAL);
-    }
-    
-    /**
-     * Generate a pricing suggestion for a product
-     */
-    private PricingSuggestion generatePricingSuggestion(Product product, TriggerReason triggerReason) {
-        PricingSuggestion suggestion = new PricingSuggestion();
-        suggestion.setProduct(product);
-        suggestion.setCurrentPrice(product.getCurrentPrice());
-        // For demo purposes, we'll just suggest a 10% increase
-        BigDecimal recommendedPrice = product.getCurrentPrice().multiply(new BigDecimal("1.1"));
-        suggestion.setRecommendedPrice(recommendedPrice);
-        suggestion.setChangeDirection(ChangeDirection.INCREASE);
-        suggestion.setConfidence(0.8);
-        suggestion.setReasoning("Generated based on " + triggerReason + " trigger");
-        suggestion.setStatus(SuggestionStatus.PENDING);
-        suggestion.setTriggerReason(triggerReason);
-        suggestion.setCreatedAt(LocalDateTime.now());
+        AdvisoryResult result = commerceAdvisorSelector.generateRecommendations(product);
+        PricingSuggestion pricingSuggestion = result.getPricingSuggestion();
+        pricingSuggestion.setTriggerReason(TriggerReason.MANUAL);
+        pricingSuggestion.setReasoning(pricingSuggestion.getReasoning() + " (Manually triggered)");
         
-        return pricingSuggestionRepository.save(suggestion);
+        return pricingSuggestionRepository.save(pricingSuggestion);
     }
     
+
+    
     /**
-     * Generate a manual reorder suggestion
+     * Generate a manual reorder suggestion using the CommerceAdvisor
      */
     @Transactional
     public ReorderSuggestion generateManualReorderSuggestion(String productId) {
@@ -138,28 +150,14 @@ public class ProductService {
         }
         
         Product product = productOpt.get();
-        return generateReorderSuggestion(product, TriggerReason.MANUAL);
-    }
-    
-    /**
-     * Generate a reorder suggestion for a product
-     */
-    private ReorderSuggestion generateReorderSuggestion(Product product, TriggerReason triggerReason) {
-        ReorderSuggestion suggestion = new ReorderSuggestion();
-        suggestion.setProduct(product);
-        suggestion.setCurrentStock(product.getStockLevel());
-        // For demo purposes, we'll just suggest ordering 2x the reorder threshold
-        int recommendedQuantity = product.getReorderThreshold() * 2;
-        suggestion.setRecommendedQuantity(recommendedQuantity);
-        suggestion.setSuggestedLeadTimeDays(5); // Default lead time
-        suggestion.setConfidence(0.8);
-        suggestion.setReasoning("Generated based on " + triggerReason + " trigger");
-        suggestion.setStatus(SuggestionStatus.PENDING);
-        suggestion.setTriggerReason(triggerReason);
-        suggestion.setCreatedAt(LocalDateTime.now());
+        AdvisoryResult result = commerceAdvisorSelector.generateRecommendations(product);
+        ReorderSuggestion reorderSuggestion = result.getReorderSuggestion();
+        reorderSuggestion.setTriggerReason(TriggerReason.MANUAL);
+        reorderSuggestion.setReasoning(reorderSuggestion.getReasoning() + " (Manually triggered)");
         
-        return reorderSuggestionRepository.save(suggestion);
+        return reorderSuggestionRepository.save(reorderSuggestion);
     }
+
     /**
      * Get pending suggestions for pricing and reorder
      */
