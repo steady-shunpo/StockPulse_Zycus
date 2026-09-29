@@ -51,4 +51,45 @@ public class Product {
     
     @Column(name = "supplier_id")
     private String supplierId;
+    
+    // Business methods
+    
+    public void recordSale(int quantity) {
+        this.stockLevel = Math.max(0, this.stockLevel - quantity);
+        this.demandVelocity += quantity;
+
+        if (this.stockLevel == 0) {
+            this.status = ProductStatus.OUT_OF_STOCK;
+        }
+    }
+
+    public void updatePrice(BigDecimal newPrice) {
+        this.currentPrice = newPrice;
+    }
+
+    public void completePricingReview() {
+        if (this.status == ProductStatus.PRICE_REVIEW_PENDING) {
+            this.status = this.stockLevel == 0
+                ? ProductStatus.OUT_OF_STOCK
+                : ProductStatus.ACTIVE;
+        }
+    }
+
+    public void setStockLevel(int stockLevel) {
+        this.stockLevel = stockLevel;
+
+        if (stockLevel == 0) {
+            this.status = ProductStatus.OUT_OF_STOCK;
+        } else if (this.status == ProductStatus.OUT_OF_STOCK) {
+            this.status = ProductStatus.ACTIVE;
+        }
+    }
+
+    public void replenishStock(int quantity) {
+        this.stockLevel += quantity;
+
+        if (this.status == ProductStatus.OUT_OF_STOCK && this.stockLevel > 0) {
+            this.status = ProductStatus.ACTIVE;
+        }
+    }
 }
