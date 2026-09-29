@@ -167,7 +167,11 @@ public class ProductService {
         return pricingSuggestionRepository.findByStatus(SuggestionStatus.PENDING);
     }
     
-    public List<ReorderSuggestion> getPendingReorderSuggestions() {
-        return reorderSuggestionRepository.findByStatus(SuggestionStatus.PENDING);
+    /**
+     * Get a product by its ID
+     */
+    public Product getProductById(String productId) {
+        Optional<Product> productOpt = productRepository.findById(productId);
+        return productOpt.orElse(null);
     }
 }
